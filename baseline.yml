@@ -1,0 +1,23 @@
+- name: Baseline config for Rocky nodes
+  hosts: linux
+  become: true
+  tasks:
+    - name: Update packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: Install baseline tools
+      ansible.builtin.dnf:
+        name:
+          - vim
+          - curl
+          - git
+          - bash-completion
+        state: present
+
+    - name: Ensure chronyd is enabled and running
+      ansible.builtin.service:
+        name: chronyd
+        enabled: true
+        state: started
