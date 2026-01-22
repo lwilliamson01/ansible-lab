@@ -1,0 +1,140 @@
+Option Compare Database
+Option Explicit
+
+' =========================
+' CONFIG (your local test)
+' =========================
+Private Const WORK_FOLDER As String = "C:\CiscoLoaderTest\"
+Private Const CLEAN_FILE As String = "C:\CiscoLoaderTest\In_Cisco_clean.csv"
+
+' Change these if your DNAC file uses a different name pattern
+Private Const INPUT_PREFIX1 As String = "APReport_"
+Private Const INPUT_PREFIX2 As String = "Subreport"
+
+' =========================
+' MAIN BUTTON
+' =========================
+Public Sub Run_Cisco_DNAC_Load()
+
+    On Error GoTo ErrHandler
+
+    Dim srcFile As String
+    Dim cleaned As String
+    cleaned = CLEAN_FILE
+
+    ' 1) Find newest DNAC export CSV in folder
+    srcFile = GetNewestCsv(WORK_FOLDER, INPUT_PREFIX1, INPUT_PREFIX2)
+    If srcFile = "" Then
+        MsgBox "No DNAC CSV found in " & WORK_FOLDER & vbCrLf & _
+               "Expected file starting with: " & INPUT_PREFIX1 & " or " & INPUT_PREFIX2, vbExclamation
+        Exit Sub
+    End If
+
+    ' 2) Clean it (remove top filter rows; keep real header row)
+    CleanDnacCsv srcFile, cleaned
+
+    ' 3) Clear old rows
+    CurrentDb.Execute "DELETE FROM CiscoRaw;", dbFailOnError
+
+    ' 4) Import cleaned CSV into CiscoRaw (uses header row)
+    ' IMPORTANT: no CiscoSpec required
+    DoCmd.TransferText _
+        TransferType:=acImportDelim, _
+        SpecificationName:="", _
+        TableName:="CiscoRaw", _
+        FileName:=cleaned, _
+        HasFieldNames:=True
+
+    MsgBox "Import complete!" & vbCrLf & _
+           "Source: " & srcFile & vbCrLf & _
+           "Cleaned: " & cleaned & vbCrLf & _
+           "Loaded into table: CiscoRaw", vbInformation
+
+    Exit Sub
+
+ErrHandler:
+    MsgBox "FAILED: " & Err.Number & " - " & Err.Description, vbCritical
+
+End Sub
+
+
+' =========================
+' HELPERS
+' =========================
+
+' Finds newest CSV in folder that starts with either prefix1 or prefix2
+Private Function GetNewestCsv(ByVal folderPath As String, ByVal prefix1 As String, ByVal prefix2 As String) As String
+
+    Dim fso As Object, fldr As Object, fil As Object
+    Dim newestFile As String
+    Dim newestDate As Date
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(folderPath) Then
+        GetNewestCsv = ""
+        Exit Function
+    End If
+
+    Set fldr = fso.GetFolder(folderPath)
+    newestFile = ""
+    newestDate = #1/1/2000#
+
+    For Each fil In fldr.Files
+        If LCase(fso.GetExtensionName(fil.Name)) = "csv" Then
+
+            If LCase(Left(fil.Name, Len(prefix1))) = LCase(prefix1) _
+               Or LCase(Left(fil.Name, Len(prefix2))) = LCase(prefix2) Then
+
+                If fil.DateLastModified > newestDate Then
+                    newestDate = fil.DateLastModified
+                    newestFile = fil.Path
+                End If
+            End If
+
+        End If
+    Next fil
+
+    GetNewestCsv = newestFile
+
+End Function
+
+
+' Removes everything above the real header row.
+' We keep the first line that starts with "AP MAC Address" and everything after it.
+Private Sub CleanDnacCsv(ByVal inPath As String, ByVal outPath As String)
+
+    Dim fso As Object
+    Dim tsIn As Object, tsOut As Object
+    Dim line As String
+    Dim foundHeader As Boolean
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    Set tsIn = fso.OpenTextFile(inPath, 1, False)   ' ForReading = 1
+    Set tsOut = fso.CreateTextFile(outPath, True)   ' overwrite
+
+    foundHeader = False
+
+    Do While Not tsIn.AtEndOfStream
+        line = tsIn.ReadLine
+
+        ' Look for the real header row
+        If Not foundHeader Then
+            If Left$(Trim$(line), Len("AP MAC Address")) = "AP MAC Address" Then
+                foundHeader = True
+                tsOut.WriteLine line
+            End If
+        Else
+            tsOut.WriteLine line
+        End If
+    Loop
+
+    tsIn.Close
+    tsOut.Close
+
+    If Not foundHeader Then
+        Err.Raise vbObjectError + 1000, "CleanDnacCsv", _
+                  "Could not find header row starting with 'AP MAC Address' in: " & inPath
+    End If
+
+End Sub
