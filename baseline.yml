@@ -1,5 +1,5 @@
 - name: Baseline config for Rocky nodes
-  hosts: linux
+  hosts: all
   become: true
   tasks:
     - name: Update packages
