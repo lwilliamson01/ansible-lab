@@ -1,0 +1,60 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: Default
+
+variables:
+  - group: awx-credentials
+
+jobs:
+  - job: TriggerAWX
+    displayName: Trigger AWX baseline-home-lab
+    steps:
+      - task: PowerShell@2
+        displayName: Launch AWX Job Template
+        inputs:
+          targetType: inline
+          script: |
+            $headers = @{
+              "Authorization" = "Bearer $(AWX_TOKEN)"
+              "Content-Type"  = "application/json"
+            }
+
+            $launch = Invoke-RestMethod `
+              -Uri "$(AWX_URL)/api/v2/job_templates/7/launch/" `
+              -Method POST `
+              -Headers $headers `
+              -Body "{}"
+
+            $jobId = $launch.job
+            Write-Host "Launched AWX job ID: $jobId"
+
+            $timeout = 600
+            $elapsed = 0
+            $interval = 15
+
+            do {
+              Start-Sleep -Seconds $interval
+              $elapsed += $interval
+
+              $status = Invoke-RestMethod `
+                -Uri "$(AWX_URL)/api/v2/jobs/$jobId/" `
+                -Method GET `
+                -Headers $headers
+
+              $state = $status.status
+              Write-Host "[$elapsed s] Job $jobId status: $state"
+
+            } while ($state -notin @("successful","failed","error","canceled") -and $elapsed -lt $timeout)
+
+            Write-Host "Final status: $state"
+
+            if ($state -ne "successful") {
+              Write-Error "AWX job did not succeed. Final status: $state"
+              exit 1
+            }
+
+            Write-Host "AWX job completed successfully!"
