@@ -2,9 +2,9 @@
   hosts: windows
   gather_facts: true
   tasks:
-    - name: Show Windows version
+    - name: Show all facts
       debug:
-        msg: "{{ ansible_os_name }} {{ ansible_os_version }}"
+        var: ansible_facts
 
     - name: Ensure Windows Update service is running
       ansible.windows.win_service:
