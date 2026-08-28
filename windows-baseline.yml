@@ -2,13 +2,9 @@
   hosts: windows
   gather_facts: true
   tasks:
-    - name: Get Windows OS info
-      ansible.windows.win_command: ver
-      register: win_ver
-
     - name: Show Windows version
       debug:
-        var: win_ver.stdout_lines
+        msg: "{{ ansible_os_name }} {{ ansible_os_version }}"
 
     - name: Ensure Windows Update service is running
       ansible.windows.win_service:
