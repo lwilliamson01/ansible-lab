@@ -1,0 +1,24 @@
+- name: Windows baseline
+  hosts: windows
+  gather_facts: true
+  tasks:
+    - name: Get Windows OS info
+      ansible.windows.win_command: ver
+      register: win_ver
+
+    - name: Show Windows version
+      debug:
+        var: win_ver.stdout_lines
+
+    - name: Ensure Windows Update service is running
+      ansible.windows.win_service:
+        name: wuauserv
+        state: started
+
+    - name: Ensure Windows Firewall is enabled
+      ansible.windows.win_firewall:
+        state: enabled
+        profiles:
+          - Domain
+          - Private
+          - Public
