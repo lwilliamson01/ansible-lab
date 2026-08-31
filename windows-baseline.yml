@@ -2,9 +2,23 @@
   hosts: windows
   gather_facts: true
   tasks:
-    - name: Show all facts
-      debug:
-        var: ansible_facts
+    - name: Install Chocolatey
+      ansible.windows.win_shell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+      args:
+        creates: C:\ProgramData\chocolatey\bin\choco.exe
+
+    - name: Install baseline software via Chocolatey
+      chocolatey.chocolatey.win_chocolatey:
+        name:
+          - git
+          - curl
+          - 7zip
+          - notepadplusplus
+          - putty
+        state: present
 
     - name: Ensure Windows Update service is running
       ansible.windows.win_service:
